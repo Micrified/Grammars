@@ -1,0 +1,8 @@
+S -> E $
+E -> T P
+P -> + T P
+P ->
+T -> F Q
+Q -> * F Q
+Q -> 
+F -> x
