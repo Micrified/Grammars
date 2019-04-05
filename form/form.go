@@ -4,6 +4,7 @@ package form
  * Form[at] package for grammar analysis.
  * Defines productions, items, item-sets, and
  * common functions that are applied to them.
+ * Designed to work with the symtab package.
 */
 
 
@@ -13,6 +14,7 @@ import (
 	"bufio"
 	"regexp"
 	"strings"
+	"symtab"
 )
 
 
@@ -26,8 +28,8 @@ import (
 // Production: Lhs ::= Rhs
 type Prod struct {
 	Off int;
-	Lhs rune;
-	Rhs []rune;
+	Lhs int;
+	Rhs []int;
 }
 
 // Item: Set of productions, each with individual offsets
@@ -38,27 +40,27 @@ type Item struct {
 
 /*
  *******************************************************************************
- *                       Functions on Rune and Rune Sets                       *
+ *                     Functions on Symbol and Symbol Sets                     *
  *******************************************************************************
 */
 
 
-// True if rune is a non-terminal
-func IsNonTerminal (r rune) bool {
-	return (r >= 'A' && r <= 'Z');
+// True if symbol is a non-terminal (s < 0)
+func IsNonTerminal (s int) bool {
+	return (s < 0);
 }
 
 
-// True if rune is a terminal
-func IsTerminal (r rune) bool {
-	return !IsNonTerminal(r) && (r >= '!' && r <= '~');
+// True if symbol is a terminal (s > 0)
+func IsTerminal (s int) bool {
+	return (s > 0);
 }
 
 
-// True if rune is contained in slice
-func SetContains (set []rune, r rune) bool {
+// True if symbol is contained in slice
+func SetContains (set []int, s int) bool {
 	for _, x := range set {
-		if x == r {
+		if x == s {
 			return true;
 		}
 	}
@@ -66,20 +68,20 @@ func SetContains (set []rune, r rune) bool {
 }
 
 
-// Inserts rune into set. Discards if already present
-func SetInsert (set []rune, r rune) []rune {
-	if SetContains(set, r) {
+// Inserts symbol into set. Discards if already present
+func SetInsert (set []int, s int) []int {
+	if SetContains(set, s) {
 		return set;
 	}
-	return append(set, r);
+	return append(set, s);
 }
 
 
-// Removes a rune from a set (checks all elements in case)
-func SetRemove (set []rune, r rune) []rune {
-	var filtered []rune = []rune{};
+// Removes a symbol from a set (checks all elements in case)
+func SetRemove (set []int, s int) []int {
+	var filtered []int = []int{};
 	for _, x := range set {
-		if x == r {
+		if x == s {
 			continue;
 		}
 		filtered = append(filtered, x);
@@ -88,8 +90,8 @@ func SetRemove (set []rune, r rune) []rune {
 }
 
 
-// Returns the union of two rune sets
-func SetUnion (a, b []rune) []rune {
+// Returns the union of two sets
+func SetUnion (a, b []int) []int {
 	for _, x := range b {
 		a = SetInsert(a, x);
 	}
@@ -98,7 +100,7 @@ func SetUnion (a, b []rune) []rune {
 
 
 // Returns string form of a set
-func SetToString (set []rune) string {
+func SetToString (set []int, tab *symtab.SymTab) string {
 	s := "{";
 	l := len(set);
 	i := 0;
@@ -106,9 +108,10 @@ func SetToString (set []rune) string {
 		goto end;
 	}
 	for {
-		s += fmt.Sprintf("%c", set[i]);
+		id, err := symtab.LookupID(set[i], tab);
+		s += id;
 		i++;
-		if i >= l {
+		if (i >= 1 || err != nil) {
 			break;
 		}
 		s += ",";
@@ -134,6 +137,7 @@ func (p *Prod) Epsilon () bool {
 
 // String form of a production. If dot is true, it is shown in production
 func (p *Prod) String (dot bool) string {
+	lhs, err := // HERE
 	s := fmt.Sprintf("%c -> ", p.Lhs);
 	if p.Epsilon() {
 		s += "ε";
