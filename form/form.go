@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"symtab"
+	"unicode"
 )
 
 
@@ -111,7 +112,7 @@ func SetToString (set []int, tab *symtab.SymTab) string {
 		id, err := symtab.LookupID(set[i], tab);
 		s += id;
 		i++;
-		if (i >= 1 || err != nil) {
+		if (i >= l || err != nil) {
 			break;
 		}
 		s += ",";
@@ -136,9 +137,9 @@ func (p *Prod) Epsilon () bool {
 
 
 // String form of a production. If dot is true, it is shown in production
-func (p *Prod) String (dot bool) string {
-	lhs, err := // HERE
-	s := fmt.Sprintf("%c -> ", p.Lhs);
+func (p *Prod) String (dot bool, tab *symtab.SymTab) string {
+	lhs, _ := symtab.LookupID(p.Lhs, tab); // If err, use placeholder returned
+	s := fmt.Sprintf("%s -> ", lhs);
 	if p.Epsilon() {
 		s += "ε";
 		goto end;
@@ -147,7 +148,8 @@ func (p *Prod) String (dot bool) string {
 		if (dot && i == p.Off) {
 			s += ".";
 		}
-		s += fmt.Sprintf("%c ", r);
+		sym, _ := symtab.LookupID(r, tab);
+		s += fmt.Sprintf("%s ", sym);
 	}
 
 	end:
@@ -169,13 +171,13 @@ func (item *Item) IsEmpty () bool {
 
 
 // String form of an Item. If dot is true, it is shown in all productions
-func (item *Item) String (dot bool) string {
+func (item *Item, tab *symtab.SymTab) String (dot bool) string {
 	if item.IsEmpty() {
 		return "Ø";
 	}
 	s := "";
 	for _, p := range item.Ps {
-		s += fmt.Sprintf("%s\n", p.String(dot));
+		s += fmt.Sprintf("%s\n", p.String(dot, tab));
 	}
 	return s;
 }
@@ -188,12 +190,12 @@ func (item *Item) String (dot bool) string {
 */
 
 
-// Parse a production from a string
-func ParseProduction (line string) (Prod, error) {
+// Parse a production from a string. Registers symbols in the given table
+func ParseProduction (line string, tab *symtab.SymTab) (Prod, error) {
 	var p Prod;
 
 	// Validate format
-	format := `^[ \t]*[A-Z][ \t]*->[ \t]*[-+*/a-zA-Z0-9() ]*[ \t]*[$]?[\n]?$`;
+	format := `^[ \t]*[A-Z][a-zA-Z']*[ \t]*->[ \t]*[-+*/^a-zA-Z0-9()' ]*[ \t]*[$]?[\n]?$`;
 	match, err := regexp.MatchString(format, line);
 	if err != nil {
 		return p, err;
@@ -201,12 +203,60 @@ func ParseProduction (line string) (Prod, error) {
 	if match == false {
 		return p, fmt.Errorf("Invalid production format: %q", line);
 	}
+
+	// Returns next word, and remaining runes. If no word, ptr is nil
+	nextword := func(rs []rune) (string *, []rune) {
+		i := 0; j := 0; l := len(rs);
+
+		// drop whitespace until next non-whitespace character
+		for _, r := range rs {
+			if !unicode.IsSpace(r) {
+				break;
+			}
+			i++;
+		}
+	
+		if (i == l) {
+			return nil, []rune{};
+		} else {
+			rs = rs[i:];
+		}
+
+		// collect characters until next whitespace character
+		for _, r := range rs {
+			if unicode.IsSpace(r) {
+				break;
+			}
+			j++;
+		}
+		s := string(rs[:j]);
+		return &s, rs[j:];
+	}
+
+	// Returns next word and runes read. If no word, ptr is nil. 
+	nextword := func(rs []rune) (string *, int) {
+		i := 0;
+
+		// drop whitespace until next non-whitespace character
+		for _, r := range rs {
+			if !unicode.IsSpace(r) {
+				break;
+			}
+			i++;
+		}
+
+		
+		// grab until next whitespace character
+		for _, r := range 
+	};
 	
 	// Remove whitespace
 	ws := " \t\n";
 	for i := range ws {
 		line = strings.Replace(line, string(ws[i]), "", -1);
 	}
+
+	// Parse tokens
 
 	// Convert line to runes
 	runes := []rune(line);
