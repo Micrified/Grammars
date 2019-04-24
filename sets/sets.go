@@ -61,6 +61,12 @@ func (s *Set) Insert (e interface{}, f Compare) {
 }
 
 
+// Returns copy of given set
+func (s Set) Copy () Set {
+	return s;
+}
+
+
 // Removes element from given set
 func (s *Set) Remove (e interface{}, f Compare) {
 	s_new := Set{};
