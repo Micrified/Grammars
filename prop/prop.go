@@ -2,194 +2,148 @@ package prop
 
 /*
  * Prop[erties] package for grammar analysis.
- * Defines routines for computing the First and Follow
+ * Defines routines for computing First and Follow
  * sets of a grammar, finding cycles, and observing
- * other properties used in identifying a grammar class
- *
+ * other characteristics of grammars
 */
 
 import (
 	"fmt"
 	"grammars/form"
+	"grammars/sets"
 )
+
 
 
 /*
  *******************************************************************************
- *                       Functions for First/Follow Sets                       *
+ *                         First/Follow Set Functions                          *
  *******************************************************************************
 */
 
 
-// Returns the first-set for non-terminal nt in grammar g
-// [Note: Wasteful since discards first-sets it is not looking for ]
-func FirstSet (nt rune, visited []rune, g form.Item) ([]rune, error) {
-	var nt_ps []*form.Prod		= []*form.Prod{};
-	var ot_ps []*form.Prod		= []*form.Prod{};
-	var first []rune			= []rune{};
-	var hasEpsilon bool			= false;
+// Returns a mapping of non-terminals to their first-sets 
+func FirstSets (g *form.Item) (map[int]*sets.Set, error) {
+	var firstSets map[int]*sets.Set = make(map[int]*sets.Set);
 
-	//fmt.Printf("FirstSet invoked on %c\n", nt);
+	// For each production, set its first-set if it isn't already
+	for _, p := range *g {
+		fmt.Printf("FirstSets: %d: ", p.Lhs);
+		if fs := firstSets[p.Lhs]; fs == nil {
+			fmt.Printf("nil -> Finding First(%d)\n", p.Lhs);
+			// First() will install other first-sets it is forced to discover
+			set, err := First(p.Lhs, sets.Set{}, g, &firstSets);
 
-	// Fail if nt is not in fact a non-terminal
-	if !form.IsNonTerminal(nt) {
-		return first, fmt.Errorf("First-Set: %c is not a non-terminal!", nt);
-	}
+			// Bubble up any errors
+			if (err != nil) {
+				return make(map[int]*sets.Set), err;
+			}
 
-	// Return if a cycle is detected
-	for _, s := range visited {
-		if s == nt {
-			fmt.Printf("FirstSet: Cycle -> Returning...\n");
-			return first, nil;
-		}
-	};
-
-	// Sort productions into those of nt, and others
-	for i := range g.Ps {
-		if (g.Ps[i]).Lhs == nt {
-			nt_ps = append(nt_ps, &(g.Ps[i]));
+			// Otherwise map the new first-set to the non-terminal
+			firstSets[p.Lhs] = &set;
 		} else {
-			ot_ps = append(ot_ps, &(g.Ps[i]));
+			fmt.Printf("Already installed!\n");
 		}
 	}
 
-	// Collect all terminals. Note if epsilon is a production
-	for _, p := range nt_ps {
-		rhs := (*p).Rhs;
-		//fmt.Printf("Analysis of production: %s\n", p.String(false));
-		// Note if production is empty (epsilon)
-		if p.Epsilon() {
-			//fmt.Printf("Rule produces epsilon!\n");
-			first = form.SetInsert(first, 'ε');
-			hasEpsilon = true;
-			continue;
-		}
-
-		// If production rhs begins with terminal, collect it
-		if form.IsTerminal(rhs[0]) {
-			//fmt.Printf("Appending %c to set!\n", rhs[0]);
-			first = form.SetInsert(first, rhs[0]);
-			continue;
-		}
-	
-		// If rhs begins with non-terminal, add its first-set
-		//fmt.Printf("First(%c) is in First(%c) ...\n", rhs[0], nt);
-		ot_first, err := FirstSet(rhs[0], append(visited, nt), g);
-		if err != nil {
-			return first, err;
-		}
-		first = form.SetUnion(first, ot_first);
-	}
-
-	// If epsilon not produced, may immediately return
-	if !hasEpsilon {
-		//fmt.Printf("First(%c) Returning early...\n", nt);
-		return first, nil;
-	}
-
-	// Else check all symbols after which nt occurs in other productions
-	for _, p := range ot_ps {
-		rhs := (*p).Rhs;
-
-		// Iterate to (N-2) as last element need not be checked
-		for i := 0; i < len(rhs) - 1; i++ {
-			if rhs[i] != nt {
-				continue;
-			}
-
-			// If next symbol is terminal, add it and move on
-			if next := rhs[i+1]; form.IsTerminal(next) {
-				//fmt.Printf("%c is being added to First(%c)\n", rhs[i+1], nt);
-				first = form.SetInsert(first, next);
-				continue;
-			}
-
-			// Otherwise it is a non-terminal, so remove epsilon
-			first = form.SetRemove(first, 'ε');
-
-			// Then add first-set of non-terminal to current set
-			//fmt.Printf("First(%c) also contains First(%c)...\n", nt, rhs[i+1]);
-			ot_first, err := FirstSet(rhs[i+1], append(visited, nt), g);
-			if err != nil {
-				return first, err;
-			}
-			first = form.SetUnion(first, ot_first);
-		}
-	}
-	return first, nil;
+	return firstSets, nil;
 }
 
 
-// Returns the follow-set for non terminal nt in grammar g
-// [Note: Wasteful since discards follow sets it is not looking for ]
-func FollowSet (nt rune, visited []rune, firsts[][]rune, g form.Item) ([]rune, error) {
-	var ps []form.Prod		= g.Ps;
-	var follow []rune		= []rune{};
-	var j int;
+// Returns the first-set for token 'tok' in grammar 'g'
+func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (sets.Set, error) {
+	ps_tok  := []*form.Production{};
+	first   := sets.Set{};
 
-	// If nt is not a non-terminal, return error
-	if !form.IsNonTerminal(nt) {
-		return follow, fmt.Errorf("FollowSet: %c is not a non-terminal!", nt);
+	// Combined copy-insert closure
+	setWith := func (i int, s sets.Set) sets.Set {
+		cpy := s.Copy();
+		cpy.Insert(i, form.TokenCompare);
+		return cpy;
 	}
 
-	// If a cycle is detected, return
-	for _, s := range visited {
-		if s == nt {
-			return follow, nil;
+	// Performs lookup for first-set in store. Else creates and saves it
+	getFirst := func (t int) (sets.Set, error) {
+		if ptr := (*store)[t]; ptr != nil {
+			return (*ptr), nil;
+		}
+		set, err := First(t, setWith(tok, visited), g, store);
+		if err != nil {
+			return sets.Set{}, err;
+		}
+		(*store)[t] = &set;
+		return set, nil;
+	}
+
+	// If token is a terminal, return it immediately
+	if form.IsTerminal(tok) {
+		return sets.Set{tok}, nil;
+	}
+
+	// Otherwise it is a non-terminal. Check for any cycles
+	if visited.Contains(tok, form.TokenCompare) {
+		return first, nil;
+	}
+
+	// Filter productions into those starting with tok
+	for i, p := range (*g) {
+		if p.Lhs == tok {
+			fmt.Printf("First(%d) concerns rule %d\n", tok, i);
+			ps_tok = append(ps_tok, &((*g)[i]));
+		} else {
+			fmt.Printf("First(%d) doesn't concern %d\n", tok, i);	
 		}
 	}
 
-	for _, p := range ps {
-		length := len(p.Rhs);
+	// For all tok productions, collect first-symbols
+	for j, p := range ps_tok {
+		var i int = 0;
 
-		// Skip empty productions
-		if length == 0 {
+		// If the production is empty, add epsilon to first-set
+		if p.EpsilonProduction() {
+			fmt.Printf("First(%d) includes epsilon!\n", tok);
+			first.Insert(form.Epsilon, form.TokenCompare);
 			continue;
 		}
 
-		// For all runes up the the second-last
-		for j = 0; j < (length - 1); j++ {
-			
-			// Skip runes until occurrence of nt
-			if p.Rhs[j] != nt {
-				continue;
+		// Else until next T or (NT not producing eps), add First sets
+		rhs := (*p).Rhs;
+		for i = 0; i < (len(rhs) - 1); i++ {
+
+			// If terminal, stop and return it
+			if form.IsTerminal(rhs[i]) {
+				fmt.Printf("First(%d) includes terminal %d in production %d\n", tok, rhs[i], j);
+				first.Insert(rhs[i], form.TokenCompare);
+				break;
 			}
 
-			// If next rune is a terminal, append and cont
-			if form.IsTerminal(p.Rhs[j+1]) {
-				follow = form.SetInsert(follow, p.Rhs[j+1]);
-				continue;
-			}
-
-			// Otherwise must be non-terminal, so fetch first-set
-			ot_first := firsts[p.Rhs[j+1] % 26];
-
-			// If doesn't contain epsilon, merge set and cont
-			if !form.SetContains(ot_first, 'ε') {
-				follow = form.SetUnion(follow, ot_first);
-				continue;
-			}
-
-			// Otherwise has epsilon.
-			// 1) Remove it from the first-set.
-			// 2) Merge with next follow set, but only if
-			// 3) No terminals succeed it.
-			ot_first = form.SetRemove(ot_first, 'ε');
-			ot_follow, err := FollowSet(p.Rhs[j+1], append(visited, nt), firsts, g);
+			// If a non-terminal, get the first-set
+			fmt.Printf("First(%d) includes First(%d)\n", tok, rhs[i]);
+			set, err := getFirst(rhs[i]);
 			if err != nil {
-				return follow, err;
+				return sets.Set{}, err;
 			}
-			follow = form.SetUnion(follow, form.SetUnion(ot_first, ot_follow));
+
+			// If the set produces epsilon, remove it since more follows
+			eps := set.Contains(form.Epsilon, form.TokenCompare);
+			set.Remove(form.Epsilon, form.TokenCompare);
+
+			// Combine the first-set with current one
+			first = sets.Union(&first, &set, form.TokenCompare);
+
+			// If that did not produce epsilon, then its over
+			if !eps {
+				break;
+			}
 		}
 
-		// At last element: If non-terminal and rhs[j] == nt, add follow set too
-		if form.IsNonTerminal(p.Rhs[j]) && p.Rhs[j] == nt && p.Lhs != nt {
-			ot_follow, err := FollowSet(p.Lhs, append(visited, nt), firsts, g);
-			if err != nil {
-				return follow, err;
-			}
-			follow = form.SetUnion(follow, ot_follow);
+		// Add last first-set to first
+		set, err := getFirst(rhs[i]);
+		if err != nil {
+			return sets.Set{}, err;
 		}
+		first = sets.Union(&first, &set, form.TokenCompare); 
 	}
-	return follow, nil;
+	
+	return first, nil;
 }

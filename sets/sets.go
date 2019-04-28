@@ -1,5 +1,10 @@
 package sets
 
+import (
+	"fmt"
+	"strings"
+)
+
 
 /*
  *******************************************************************************
@@ -111,3 +116,35 @@ func (s *Set) String (f Stringify) string {
 	d += "}";
 	return d;
 }
+
+
+/*
+ *******************************************************************************
+ *                          Default Sorting Functions                          *
+ *******************************************************************************
+*/
+
+
+// String: Defines a comparison (equality) function
+func CompareString (a, b interface{}) bool {
+	return (strings.Compare(a.(string), b.(string)) == 0);
+}
+
+
+// String: Defines a stringify function
+func ShowString(a interface{}) string {
+	return a.(string);
+}
+
+// Int: Defines a comparison (equality) function
+func CompareInt (a, b interface{}) bool {
+	return (a.(int) == b.(int));
+}
+
+
+// Int: Defines a stringify function
+func ShowInt (a interface{}) string {
+	return fmt.Sprintf("%d", a.(int));
+}
+
+
