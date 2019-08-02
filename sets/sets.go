@@ -66,7 +66,7 @@ func (s *Set) Insert (e interface{}, f Compare) {
 }
 
 
-// Returns copy of given set
+// Returns copy of given set (caution - applies to pointer sets)
 func (s Set) Copy () Set {
 	return s;
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 	"grammars/form"
-	// "grammars/sets"
+	"grammars/sets"
 )
 
 
@@ -29,7 +29,6 @@ func show (t interface{}) string {
 
 
 // Checks that independent productions map directly to their own terminals
-/*
 func TestFirstSetsDisjointTerminals (t *testing.T) {
 
 	// Creating rules
@@ -62,9 +61,8 @@ func TestFirstSetsDisjointTerminals (t *testing.T) {
 	}
 }
 
-*/
+
 // Checks that non-terminal productions inherit the first-sets of their sub-productions
-/*
 func TestFirstSetIndirection (t *testing.T) {
 	// Creating rules
 	p1 := form.Production{-1, []int{-2}, 0};
@@ -90,7 +88,8 @@ func TestFirstSetIndirection (t *testing.T) {
 		}
 	}
 }
-*/
+
+// Verifies that a production with a nullable nonterminal includes succeeding terminals in the First set but not epsilon
 func TestFirstSetEpsilon (t *testing.T) {
 	// Creating rules
 	p1 := form.Production{-1, []int{-2,1}, 0};
@@ -117,5 +116,9 @@ func TestFirstSetEpsilon (t *testing.T) {
 
 	if ((set_2.Len() != 2) || (set_2.Contains(2, form.TokenCompare) == false) || (set_2.Contains(0, form.TokenCompare) == false)) {
 		t.Errorf("set_2 should be {1,2} but is %s!", set_2.String(show));
+	}
+
+	if (set_1.Contains(form.Epsilon, form.TokenCompare)) {
+		t.Errorf("set_1 must not contain epsilon!");
 	}
 }

@@ -147,3 +147,94 @@ func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (
 	
 	return first, nil;
 }
+
+
+// Returns the follow-set for the non-terminal 'tok' in grammar 'g' with first-set 'fs' 
+func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set, store *map[int]*sets.Set) (sets.Set, error) {
+	follow := sets.Set{};
+
+	// Combined copy-insert closure
+	setWith := func (i int, s sets.Set) sets.Set {
+		cpy := s.Copy();
+		cpy.Insert(i, form.TokenCompare);
+		return cpy;
+	}
+
+	// Performs lookup for follow-set in store. Else creates and saves it
+	getFollow := func (t int) (sets.Set, error) {
+		if ptr := (*store)[t]; ptr != nil {
+			return (*ptr), nil;
+		}
+		set, err := Follow(t, setWith(tok, visited), g, firsts, store);
+		if err != nil {
+			return sets.Set{}, err;
+		}
+		(*store)[t] = &set;
+		return set, nil;
+	}
+
+	// Return error if not invoked on a non-terminal
+	if form.IsNonTerminal(tok) == false {
+		return follow, fmt.Errorf("Follow may only be computed for non-terminals, got: %d", tok);
+	}
+
+	// If the token has already been visited, return empty set but no error
+	if visited.Contains(tok, form.TokenCompare) {
+		return follow, nil;
+	}
+
+	// Check each production in grammar 'g' for occurrences of 'tok'
+	for _, p := range g {
+		
+		// Ignore epsilon productions
+		if p.EpsilonProduction() {
+			continue;
+		}
+
+		// For each occurrence of 'tok' in the production, update follow-set
+		i := 0; rhs := p.Rhs; lhs := p.Lhs; length := len(rhs);
+		for	{
+			
+			// Move to next occurrence of token
+			for ; i < length && rhs[i] != tok; i++ {
+			}
+
+			// If no occurrences - end now
+			if i >= length {
+				break;
+			}
+
+			// Since there was an occurrence - collect first-follow sets
+			j := 0; done := false;
+			for k := i + 1; k < length && !done; k++, j++ {
+
+				// Extract the first-set for the next token
+				include := firsts[rhs[k]];
+
+				// If the set doesn't contain epsilon, mark to stop
+				done = include.Contains(form.Epsilon, form.TokenCompare);
+
+				// Remove epsilon from the include set (if it was ever there)
+				include.Remove(form.Epsilon, form.TokenCompare);
+
+				// Merge the include set with the follow-set
+				follow = sets.Union(&follow, &include, form.TokenCompare);
+			}
+
+			// If nothing after 'tok' or spanned till end: add follow of production LHS
+			if j == 0 || i + j >= length {
+				include, err := getFollow(lhs);
+				if err != nil {
+					return sets.Set{}, err;
+				}
+				follow = sets.Union(&follow, &include, form.TokenCompare);
+			}
+
+			// Update iterator
+			i += j;
+		}
+	}
+
+
+	return follow, nil;
+}
