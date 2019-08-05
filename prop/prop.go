@@ -22,15 +22,28 @@ import (
 */
 
 
-// Returns a mapping of non-terminals to their first-sets 
+// Returns a mapping of tokens to their first-sets 
 func FirstSets (g *form.Item) (map[int]*sets.Set, error) {
 	var firstSets map[int]*sets.Set = make(map[int]*sets.Set);
 
-	// For each production, set its first-set if it isn't already
+	// Allows sets to be displayed as sets of integers
+	strfy := func (val interface{}) string {
+		intval := val.(int);
+		return fmt.Sprintf("%d", intval);
+	}
+
+	// For each production NT, set its first-set if it isn't already
 	for _, p := range *g {
-		fmt.Printf("FirstSets: %d: ", p.Lhs);
+
+		// First install all terminals into the map (if any)
+		for _, t := range p.Rhs {
+			if form.IsTerminal(t) {
+				set := sets.Set{t}; 
+				firstSets[t] = &set;
+			}
+		}
+
 		if fs := firstSets[p.Lhs]; fs == nil {
-			fmt.Printf("nil -> Finding First(%d)\n", p.Lhs);
 			// First() will install other first-sets it is forced to discover
 			set, err := First(p.Lhs, sets.Set{}, g, &firstSets);
 
@@ -39,10 +52,10 @@ func FirstSets (g *form.Item) (map[int]*sets.Set, error) {
 				return make(map[int]*sets.Set), err;
 			}
 
+			fmt.Printf("First(%d) = %s\n", p.Lhs, set.String(strfy));
+
 			// Otherwise map the new first-set to the non-terminal
 			firstSets[p.Lhs] = &set;
-		} else {
-			fmt.Printf("Already installed!\n");
 		}
 	}
 
@@ -75,11 +88,6 @@ func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (
 		return set, nil;
 	}
 
-	// If token is a terminal, return it immediately
-	if form.IsTerminal(tok) {
-		return sets.Set{tok}, nil;
-	}
-
 	// Otherwise it is a non-terminal. Check for any cycles
 	if visited.Contains(tok, form.TokenCompare) {
 		return first, nil;
@@ -88,20 +96,16 @@ func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (
 	// Filter productions into those starting with tok
 	for i, p := range (*g) {
 		if p.Lhs == tok {
-			fmt.Printf("First(%d) concerns rule %d\n", tok, i);
 			ps_tok = append(ps_tok, &((*g)[i]));
-		} else {
-			fmt.Printf("First(%d) doesn't concern %d\n", tok, i);	
 		}
 	}
 
 	// For all tok productions, collect first-symbols
-	for j, p := range ps_tok {
+	for _, p := range ps_tok {
 		var i int = 0;
 
 		// If the production is empty, add epsilon to first-set
 		if p.EpsilonProduction() {
-			fmt.Printf("First(%d) includes epsilon!\n", tok);
 			first.Insert(form.Epsilon, form.TokenCompare);
 			continue;
 		}
@@ -112,13 +116,11 @@ func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (
 
 			// If terminal, stop and return it
 			if form.IsTerminal(rhs[i]) {
-				fmt.Printf("First(%d) includes terminal %d in production %d\n", tok, rhs[i], j);
 				first.Insert(rhs[i], form.TokenCompare);
 				break;
 			}
 
 			// If a non-terminal, get the first-set
-			fmt.Printf("First(%d) includes First(%d)\n", tok, rhs[i]);
 			set, err := getFirst(rhs[i]);
 			if err != nil {
 				return sets.Set{}, err;
@@ -137,15 +139,52 @@ func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (
 			}
 		}
 
-		// Add last first-set to first
-		set, err := getFirst(rhs[i]);
-		if err != nil {
-			return sets.Set{}, err;
+		// If last is terminal add it, else merge first-set of non-terminal
+		if form.IsTerminal(rhs[i]) {
+			first.Insert(rhs[i], form.TokenCompare);
+		} else {
+			set, err := getFirst(rhs[i]);
+			if err != nil {
+				return sets.Set{}, err;
+			}
+			first = sets.Union(&first, &set, form.TokenCompare);
 		}
-		first = sets.Union(&first, &set, form.TokenCompare); 
 	}
 	
 	return first, nil;
+}
+
+
+// Returns a mapping of non-terminals to their follow-sets 
+func FollowSets (g *form.Item, firstSets *map[int]*sets.Set) (map[int]*sets.Set, error) {
+	var followSets map[int]*sets.Set = make(map[int]*sets.Set);
+
+	// Allows sets to be displayed as sets of integers
+	strfy := func (val interface{}) string {
+		intval := val.(int);
+		return fmt.Sprintf("%d", intval);
+	}
+
+	// For each production, set its follow-set if it isn't already
+	for _, p := range *g {
+		if fs := followSets[p.Lhs]; fs == nil {
+
+			// Follow() will install other first-sets it is forced to discover
+			set, err := Follow(p.Lhs, sets.Set{}, g, firstSets, &followSets);
+
+			// Bubble up any errors
+			if (err != nil) {
+				return make(map[int]*sets.Set), err;
+			}
+
+			fmt.Printf("Follow(%d) = %s\n", p.Lhs, set.String(strfy));
+
+			// Otherwise map the new first-set to the non-terminal
+			followSets[p.Lhs] = &set;
+		}
+	}
+
+	return followSets, nil;
 }
 
 
@@ -184,7 +223,7 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 	}
 
 	// Check each production in grammar 'g' for occurrences of 'tok'
-	for _, p := range g {
+	for _, p := range *g {
 		
 		// Ignore epsilon productions
 		if p.EpsilonProduction() {
@@ -206,10 +245,10 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 
 			// Since there was an occurrence - collect first-follow sets
 			j := 0; done := false;
-			for k := i + 1; k < length && !done; k++, j++ {
+			for k := i + 1; k < length && !done; k, j = k + 1, j + 1 {
 
 				// Extract the first-set for the next token
-				include := firsts[rhs[k]];
+				include := ((*firsts)[rhs[k]]).Copy();
 
 				// If the set doesn't contain epsilon, mark to stop
 				done = include.Contains(form.Epsilon, form.TokenCompare);
@@ -222,19 +261,19 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 			}
 
 			// If nothing after 'tok' or spanned till end: add follow of production LHS
-			if j == 0 || i + j >= length {
+			if j == 0 || done {
 				include, err := getFollow(lhs);
 				if err != nil {
 					return sets.Set{}, err;
 				}
 				follow = sets.Union(&follow, &include, form.TokenCompare);
+				break;
 			}
 
 			// Update iterator
 			i += j;
 		}
 	}
-
 
 	return follow, nil;
 }
