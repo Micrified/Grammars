@@ -364,3 +364,51 @@ func TestSimpleArithmeticGrammarFollowSets (t *testing.T) {
 	}
 
 }
+
+
+// Tests combined follow-set properties
+func TestFollowSetPropertiesCombined (t *testing.T) {
+
+	// Allows sets to be displayed as sets of integers
+	strfy := func (val interface{}) string {
+		intval := val.(int);
+		return fmt.Sprintf("%d", intval);
+	}
+
+	// Allows for a simpler comparison
+	in := func (s *sets.Set, v int) bool {
+		return s.Contains(v, form.TokenCompare);
+	}
+
+	// Create productions
+	p1 := form.Production{-1, []int{-2, 1}, 0};								// P -> S w
+	p2 := form.Production{-2, []int{-3, 2, -3, 3, -3, 4, -3, -4, -5}, 0};	// S -> E x E y E z E Q R
+	p3 := form.Production{-4, []int{5}, 0};									// Q -> a
+	p4 := form.Production{-4, []int{}, 0};									// Q -> 
+	p5 := form.Production{-5, []int{6}, 0};									// R -> b
+	p6 := form.Production{-5, []int{}, 0};									// R -> 
+	p7 := form.Production{-3, []int{7}, 0};									// E -> e
+
+	// Create the grammar
+	g := form.Item{p1, p2, p3, p4, p5, p6, p7};
+
+	// Compute first-sets for all productions (needed for the follow-set)
+	first_sets, e1 := FirstSets(&g);
+
+	if e1 != nil {
+		t.Errorf("Error computing first-sets: %s", e1);
+	}
+
+	// Compute follow-set
+	follow_sets, e2 := FollowSets(&g, &first_sets);
+
+	if e2 != nil {
+		t.Errorf("Error computing follow-sets: %s", e2);
+	}
+
+	// Follow(-3) should be set: {2,3,4,5,6,1}
+	if s := follow_sets[-3]; s.Len() != 6 || !in(s,1) || !in(s,2) || !in(s,3) || !in(s,4) || !in(s,5) || !in(s,6) {
+		t.Errorf("Follow(-3) should be {2,3,4,5,6,1} but is: %s\n", s.String(strfy));
+	}
+
+}
