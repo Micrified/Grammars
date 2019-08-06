@@ -251,7 +251,7 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 				include := ((*firsts)[rhs[k]]).Copy();
 
 				// If the set doesn't contain epsilon, mark to stop
-				done = include.Contains(form.Epsilon, form.TokenCompare);
+				done = !include.Contains(form.Epsilon, form.TokenCompare);
 
 				// Remove epsilon from the include set (if it was ever there)
 				include.Remove(form.Epsilon, form.TokenCompare);
@@ -261,8 +261,8 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 			}
 
 			// If nothing after 'tok' or spanned till end: add follow of production LHS
-			if j == 0 || done {
-				include, err := getFollow(lhs);
+			if !done || (j == 0 || i + j >= length) {
+				include, err := getFollow(lhs)
 				if err != nil {
 					return sets.Set{}, err;
 				}
