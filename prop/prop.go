@@ -261,7 +261,7 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 			}
 
 			// If nothing after 'tok' or spanned till end: add follow of production LHS
-			if !done || (j == 0 || i + j >= length) {
+			if !done || j == 0 {
 				include, err := getFollow(lhs)
 				if err != nil {
 					return sets.Set{}, err;
