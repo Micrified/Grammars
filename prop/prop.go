@@ -26,12 +26,6 @@ import (
 func FirstSets (g *form.Item) (map[int]*sets.Set, error) {
 	var firstSets map[int]*sets.Set = make(map[int]*sets.Set);
 
-	// Allows sets to be displayed as sets of integers
-	strfy := func (val interface{}) string {
-		intval := val.(int);
-		return fmt.Sprintf("%d", intval);
-	}
-
 	// For each production NT, set its first-set if it isn't already
 	for _, p := range *g {
 
@@ -51,8 +45,6 @@ func FirstSets (g *form.Item) (map[int]*sets.Set, error) {
 			if (err != nil) {
 				return make(map[int]*sets.Set), err;
 			}
-
-			fmt.Printf("First(%d) = %s\n", p.Lhs, set.String(strfy));
 
 			// Otherwise map the new first-set to the non-terminal
 			firstSets[p.Lhs] = &set;
@@ -159,12 +151,6 @@ func First (tok int, visited sets.Set, g *form.Item, store *map[int]*sets.Set) (
 func FollowSets (g *form.Item, firstSets *map[int]*sets.Set) (map[int]*sets.Set, error) {
 	var followSets map[int]*sets.Set = make(map[int]*sets.Set);
 
-	// Allows sets to be displayed as sets of integers
-	strfy := func (val interface{}) string {
-		intval := val.(int);
-		return fmt.Sprintf("%d", intval);
-	}
-
 	// For each production, set its follow-set if it isn't already
 	for _, p := range *g {
 		if fs := followSets[p.Lhs]; fs == nil {
@@ -176,8 +162,6 @@ func FollowSets (g *form.Item, firstSets *map[int]*sets.Set) (map[int]*sets.Set,
 			if (err != nil) {
 				return make(map[int]*sets.Set), err;
 			}
-
-			fmt.Printf("Follow(%d) = %s\n", p.Lhs, set.String(strfy));
 
 			// Otherwise map the new first-set to the non-terminal
 			followSets[p.Lhs] = &set;
@@ -276,4 +260,29 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 	}
 
 	return follow, nil;
+}
+
+
+/*
+ *******************************************************************************
+ *      Left-to-right Leftmost-derivation (LL) Grammar Property Functions      *
+ *******************************************************************************
+*/
+
+// Returns true if the given non-terminal 'tok' is left-recursive
+func IsLeftRecursive (int tok, g *form.Item, visited sets.Set) bool {
+
+
+	scanRule := func (int search, int tok, g *form.Item, visited sets.Set) bool {
+
+	} 
+
+	// For all productions beginning with 'tok'
+	for _, p := range *g {
+		if p.Lhs != tok {
+			continue;
+		}
+
+		// For each non-terminal in the production, search for 
+	}
 }
