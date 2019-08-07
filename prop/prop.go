@@ -272,6 +272,15 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 
 // Returns true if the given non-terminal 'tok' is left-recursive
 func IsLeftRecursive (tok int, g *form.Item, firsts *map[int]*sets.Set, visited sets.Set) bool {
+	return isLeftRecursive(tok, tok, g, firsts, sets.Set{});
+}
+
+
+// Searches for a cycle in a rule
+func isLeftRecursive (rule, target int, g *form.Item, firsts *map[int]*sets.Set, visited sets.Set) bool {
+
+	// Assume not found
+	result := false;
 
 	// Combined copy-insert closure
 	setWith := func (i int, s sets.Set) sets.Set {
@@ -280,50 +289,42 @@ func IsLeftRecursive (tok int, g *form.Item, firsts *map[int]*sets.Set, visited 
 		return cpy;
 	}
 
-	// Recursive search function
-	searchRule := func (rule, target int, g *form.Item, visited sets.Set) bool {
 
-		// Assume not found
-		result := false;
+	// For all productions of the currently searched rule, look for occurrence of tok
+	for _, p := range *g {
 
-		// For all productions of the currently searched rule, look for occurrence of tok
-		for _, p := range *g {
-
-			// Ignore irrelevant rules and epsilon productions of relevant rules
-			if p.Lhs != rule || p.EpsilonProduction() {
-				continue;
-			}
-
-			// For each component of the production ... 
-			for i := 0; i < len(p.Rhs); i++ {
-
-				// Exit upon discovering a terminal as no cycle is possible now
-				if form.IsTerminal(p.Rhs[i]) {
-					break;
-				}
-
-				// If non-terminal is sought one - mark true and break
-				if p.Rhs[i] == tok {
-					result = true;
-					break;
-				}
-
-				// Otherwise different non-terminal. If not already searched - search it
-				if !visited.Contains(p.Rhs[i], form.TokenCompare) {
-					result |= searchRule(p.Rhs[i], target, g, setWith(rule, visited));
-				}
-
-				// If the first-set doesn't contain epsilon, then stop
-				if fs := firsts[p.Rhs[i]]; !fs.Contains(form.Epsilon, form.TokenCompare) {
-					break;
-				}	
-			}
+		// Ignore irrelevant rules and epsilon productions of relevant rules
+		if p.Lhs != rule || p.EpsilonProduction() {
+			continue;
 		}
 
-		// Return outcome
-		return result;
+		// For each component of the production ... 
+		for i := 0; i < len(p.Rhs); i++ {
 
+			// Exit upon discovering a terminal as no cycle is possible now
+			if form.IsTerminal(p.Rhs[i]) {
+				break;
+			}
+
+			// If non-terminal is sought one - mark true and break
+			if p.Rhs[i] == target {
+				result = true;
+				break;
+			}
+
+			// Otherwise different non-terminal. If not already searched - search it
+			if !visited.Contains(p.Rhs[i], form.TokenCompare) {
+				result = result || isLeftRecursive(p.Rhs[i], target, g, firsts, setWith(rule, visited));
+			}
+
+			// If the first-set doesn't contain epsilon, then stop
+			if f, ok := (*firsts)[p.Rhs[i]]; ok && !f.Contains(form.Epsilon, form.TokenCompare) {
+				break;
+			}	
+		}
 	}
 
-	return searchRule(tok, tok, g, sets.Set{});
+	// Return outcome
+	return result;
+
 }
