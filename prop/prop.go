@@ -271,7 +271,7 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 
 
 // Returns true if the given non-terminal 'tok' is left-recursive
-func IsLeftRecursive (tok int, g *form.Item, firsts *map[int]*sets.Set, visited sets.Set) bool {
+func IsLeftRecursive (tok int, g *form.Item, firsts *map[int]*sets.Set) bool {
 	return isLeftRecursive(tok, tok, g, firsts, sets.Set{});
 }
 

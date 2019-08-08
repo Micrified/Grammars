@@ -23,7 +23,7 @@ func show (t interface{}) string {
 
 /*
  *******************************************************************************
- *                              Testing Functions                              *
+ *                         First-Set Testing Functions                         *
  *******************************************************************************
 */
 
@@ -191,6 +191,14 @@ func TestSimpleArithmeticGrammarFirstSets (t *testing.T) {
 		t.Errorf("Production T'[-6] should have first-set {4,5,0} but has: %s", s.String(strfy));
 	}
 }
+
+
+/*
+ *******************************************************************************
+ *                          Follow-Set Test Functions                          *
+ *******************************************************************************
+*/
+
 
 // Tests that a terminal after a non-terminal is included in the follow-set
 func TestFollowTerminalAfterNonTerminal (t *testing.T) {
@@ -411,4 +419,140 @@ func TestFollowSetPropertiesCombined (t *testing.T) {
 		t.Errorf("Follow(-3) should be {2,3,4,5,6,1} but is: %s\n", s.String(strfy));
 	}
 
+}
+
+
+/*
+ *******************************************************************************
+ *                        Left-Recursion Test Functions                        *
+ *******************************************************************************
+*/
+
+// Tests trivial Left-Recursion
+func TestLeftRecursionImmediateCase (t *testing.T) {
+	
+	// Create Production
+	p := form.Production{-1, []int{-1}, 0};	// A -> A
+
+	// Create grammar
+	g := form.Item{p};
+
+	// Compute first-sets for productions
+	first_sets, err := FirstSets(&g);
+
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that a cycle exists for A
+	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+		t.Errorf("Production A[-1] has a cycle that was not found!");
+	}
+}
+
+// Tests trivial case of no Left-Recursion
+func TestLeftRecursionImmediateCaseNone (t *testing.T) {
+	
+	// Create Production
+	p := form.Production{-1, []int{1}, 0};	// A -> a
+
+	// Create grammar
+	g := form.Item{p};
+
+	// Compute first-sets for productions
+	first_sets, err := FirstSets(&g);
+
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that a cycle exists for A
+	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); isCycleA {
+		t.Errorf("Production A[-1] does not have a cycle - yet one was found!");
+	}
+}
+
+// Tests case where left-recursion occurs through two non-terminal rewrites
+func TestLeftRecursionIndirectRewrites (t *testing.T) {
+	
+	// Create Production
+	p1 := form.Production{-1, []int{-2}, 0};	// A -> B
+	p2 := form.Production{-2, []int{-1}, 0};	// B -> A
+
+	// Create grammar
+	g := form.Item{p1, p2};
+
+	// Compute first-sets for productions
+	first_sets, err := FirstSets(&g);
+
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that a cycle exists for A
+	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+		t.Errorf("Production A[-1] has a cycle!");
+	}
+}
+
+// Tests case where left-recursion is obfuscated by another nonterminal with an epsilon production
+func TestLeftRecursionEpsilonObfuscation (t *testing.T) {
+	
+	// Create Production
+	p1 := form.Production{-1, []int{-2, -1}, 0};	// A -> BA
+	p2 := form.Production{-2, []int{1}, 0};			// B -> a
+	p3 := form.Production{-2, []int{}, 0};			// B -> 
+
+	// Create grammar
+	g := form.Item{p1, p2, p3};
+
+	// Compute first-sets for productions
+	first_sets, err := FirstSets(&g);
+
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that a cycle exists for A
+	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+		t.Errorf("Production A[-1] has a cycle!");
+	}
+}
+
+// Tests Left-Recursion on a grammar with nullable nonterminals and blocking terminals
+func TestLeftRecursionCombined (t *testing.T) {
+
+	// Create productions
+	p1 := form.Production{-1, []int{1, -2, 2}, 0};	// A -> aBb
+	p2 := form.Production{-1, []int{-3, -2, 3}, 0};	// A -> CBc
+	p3 := form.Production{-2, []int{4}, 0};			// B -> d
+	p4 := form.Production{-2, []int{-3, -1}, 0};	// B -> CA
+	p5 := form.Production{-3, []int{5}, 0};			// C -> e
+	p6 := form.Production{-3, []int{}, 0};			// C ->
+
+	// Create the grammar
+	g := form.Item{p1, p2, p3, p4, p5, p6};
+
+	// Compute first-sets for all productions
+	first_sets, err := FirstSets(&g);
+
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that A has a cycle
+	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+		t.Errorf("Production A[-1] has a cycle that was not found!");
+	}
+
+	// Check that B has a cycle
+	if isCycleB := IsLeftRecursive(-2, &g, &first_sets); !isCycleB {
+		t.Errorf("Production B[-2] has a cycle that was not found!");
+	}
+
+	// Check that C does not have a cycle
+	if isCycleC := IsLeftRecursive(-3, &g, &first_sets); isCycleC {
+		t.Errorf("Production C[-3] does not have a cycle - yet one was found!");
+	}
+	
 }
