@@ -14,6 +14,19 @@ import (
 )
 
 
+/*
+ *******************************************************************************
+ *                              Type Definitions                               *
+ *******************************************************************************
+*/
+
+
+// Describes rewrite where a non-terminal is replaced by its definition
+type Rewrite struct {
+	Rule	int;				// The index of the production being considered
+	Index	int;				// The index within the source production
+}
+
 
 /*
  *******************************************************************************
@@ -272,15 +285,40 @@ func Follow (tok int, visited sets.Set, g *form.Item, firsts *map[int]*sets.Set,
 
 // Returns true if the given non-terminal 'tok' is left-recursive
 func IsLeftRecursive (tok int, g *form.Item, firsts *map[int]*sets.Set) bool {
-	return isLeftRecursive(tok, tok, g, firsts, sets.Set{});
+	rws := isLeftRecursive(tok, tok, g, firsts, sets.Set{});
+	fmt.Println("isLeftRecursive() ...");
+	if len(rws) != 0 {
+		for i := 0; i < len(rws); i++ {
+			r := rws[i].Rule;
+			k := rws[i].Index;
+			p := (*g)[r];
+
+			s := fmt.Sprintf("%d -> ", p.Lhs);
+			if len(p.Rhs) == 0 {
+				s = s + "<eps>";
+				goto show;
+			}
+			for j := 0; j < k; j++ {
+				s = s + fmt.Sprintf("%d ", p.Rhs[j]);
+			}
+			s = s + fmt.Sprintf("[ %d ] ", p.Rhs[k]);
+			for j := k + 1; j < len(p.Rhs); j++ {
+				s = s + fmt.Sprintf("%d ", p.Rhs[j]);
+			}
+show:
+			fmt.Printf("%s\n", s);
+		}
+	}
+	return len(rws) != 0;
 }
 
 
-// Searches for a cycle in a rule
-func isLeftRecursive (rule, target int, g *form.Item, firsts *map[int]*sets.Set, visited sets.Set) bool {
+// Searches for a cycle in a rule. If found, a 
+func isLeftRecursive (rule, target int, g *form.Item, firsts *map[int]*sets.Set, visited sets.Set) []Rewrite {
 
 	// Assume not found
-	result := false;
+	// result := false;
+	rws := []Rewrite{};
 
 	// Combined copy-insert closure
 	setWith := func (i int, s sets.Set) sets.Set {
@@ -291,7 +329,7 @@ func isLeftRecursive (rule, target int, g *form.Item, firsts *map[int]*sets.Set,
 
 
 	// For all productions of the currently searched rule, look for occurrence of tok
-	for _, p := range *g {
+	for r, p := range *g {
 
 		// Ignore irrelevant rules and epsilon productions of relevant rules
 		if p.Lhs != rule || p.EpsilonProduction() {
@@ -308,13 +346,17 @@ func isLeftRecursive (rule, target int, g *form.Item, firsts *map[int]*sets.Set,
 
 			// If non-terminal is sought one - mark true and break
 			if p.Rhs[i] == target {
-				result = true;
+				rws = append(rws, Rewrite{r, i});
 				break;
 			}
 
 			// Otherwise different non-terminal. If not already searched - search it
 			if !visited.Contains(p.Rhs[i], form.TokenCompare) {
-				result = result || isLeftRecursive(p.Rhs[i], target, g, firsts, setWith(rule, visited));
+				got := isLeftRecursive(p.Rhs[i], target, g, firsts, setWith(rule, visited));
+				if len(got) != 0 {
+					rws = append(got, Rewrite{r, i});
+				}
+				// result = result || isLeftRecursive(p.Rhs[i], target, g, firsts, setWith(rule, visited));
 			}
 
 			// If the first-set doesn't contain epsilon, then stop
@@ -325,6 +367,6 @@ func isLeftRecursive (rule, target int, g *form.Item, firsts *map[int]*sets.Set,
 	}
 
 	// Return outcome
-	return result;
+	return rws;
 
 }
