@@ -445,7 +445,7 @@ func TestLeftRecursionImmediateCase (t *testing.T) {
 	}
 
 	// Check that a cycle exists for A
-	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+	if isCycleA, _ := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
 		t.Errorf("Production A[-1] has a cycle that was not found!");
 	}
 }
@@ -467,7 +467,7 @@ func TestLeftRecursionImmediateCaseNone (t *testing.T) {
 	}
 
 	// Check that a cycle exists for A
-	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); isCycleA {
+	if isCycleA, _ := IsLeftRecursive(-1, &g, &first_sets); isCycleA {
 		t.Errorf("Production A[-1] does not have a cycle - yet one was found!");
 	}
 }
@@ -490,7 +490,7 @@ func TestLeftRecursionIndirectRewrites (t *testing.T) {
 	}
 
 	// Check that a cycle exists for A
-	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+	if isCycleA, _ := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
 		t.Errorf("Production A[-1] has a cycle!");
 	}
 }
@@ -514,7 +514,7 @@ func TestLeftRecursionEpsilonObfuscation (t *testing.T) {
 	}
 
 	// Check that a cycle exists for A
-	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+	if isCycleA, _ := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
 		t.Errorf("Production A[-1] has a cycle!");
 	}
 }
@@ -541,17 +541,17 @@ func TestLeftRecursionCombined (t *testing.T) {
 	}
 
 	// Check that A has a cycle
-	if isCycleA := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
+	if isCycleA, _ := IsLeftRecursive(-1, &g, &first_sets); !isCycleA {
 		t.Errorf("Production A[-1] has a cycle that was not found!");
 	}
 
 	// Check that B has a cycle
-	if isCycleB := IsLeftRecursive(-2, &g, &first_sets); !isCycleB {
+	if isCycleB, _ := IsLeftRecursive(-2, &g, &first_sets); !isCycleB {
 		t.Errorf("Production B[-2] has a cycle that was not found!");
 	}
 
 	// Check that C does not have a cycle
-	if isCycleC := IsLeftRecursive(-3, &g, &first_sets); isCycleC {
+	if isCycleC, _ := IsLeftRecursive(-3, &g, &first_sets); isCycleC {
 		t.Errorf("Production C[-3] does not have a cycle - yet one was found!");
 	}
 	

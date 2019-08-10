@@ -186,3 +186,55 @@ func TestSetUnion (t *testing.T) {
 		t.Errorf("Union of empty sets should also be empty!");
 	}
 }
+
+func TestSetIntersect (t *testing.T) {
+	as := []int{0,2,4};
+	bs := []int{1,3,5};
+	cs := []int{};
+
+	set_as := intsToSet(as);
+	set_bs := intsToSet(bs);
+	set_cs := intsToSet(cs);
+
+	// Check that the intersect of as and bs is null
+	iab := Intersect(&set_as, &set_bs, IntCompare);
+	if iab.Len() != 0 {
+		t.Errorf("Intersect of disjoint sets should be empty!");
+	}
+
+	// Check that the intersect of as and an empty set is empty
+	iac := Intersect(&set_as, &set_cs, IntCompare);
+	if iac.Len() != 0 {
+		t.Errorf("Intersect with empty set should always be empty!");
+	}
+
+	// Check that the intersect of a set with itself is that set
+	iaa := Intersect(&set_as, &set_as, IntCompare);
+	for _, k := range as {
+		if !iaa.Contains(k, IntCompare) {
+			t.Errorf("Set iaa should contain %d but does not!", k);
+		}
+	}
+
+	// Check that the intersect of empty set with empty set is valid
+	icc := Intersect(&set_cs, &set_cs, IntCompare);
+	if icc.Len() != 0 {
+		t.Errorf("Set icc should be empty as intersect of two empty sets!");
+	}
+
+	// Copy elements from set a into set b
+	for _, e := range set_as {
+		set_bs.Insert(e, IntCompare);
+	}
+
+	// Extract the intersection of set bs and as
+	iab = Intersect(&set_as, &set_bs, IntCompare);
+
+	// The elements in common should be exactly those of set as
+	for _, e := range as {
+		if iab.Contains(e, IntCompare) == false {
+			t.Errorf("Intersection of (aUb)I(a) should yield (a) if (b) is disjoint!");
+		}
+	}
+	
+}

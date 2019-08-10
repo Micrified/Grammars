@@ -45,8 +45,8 @@ func (s Set) Cap () int {
 
 
 // Returns true if set contains element
-func (s Set) Contains (e interface{}, f Compare) bool {
-	for _, x := range s {
+func (s *Set) Contains (e interface{}, f Compare) bool {
+	for _, x := range *s {
 		if f(e,x) {
 			return true;
 		}
@@ -90,6 +90,17 @@ func Union (a, b *Set, f Compare) Set {
 	s := *a;
 	for _, e := range *b {
 		s.Insert(e, f);
+	}
+	return s;
+}
+
+// Returns elements found in both sets.
+func Intersect (a, b *Set, f Compare) Set {
+	s := Set{};
+	for _, e := range *a {
+		if b.Contains(e, f) {
+			s = append(s, e);
+		}
 	}
 	return s;
 }
