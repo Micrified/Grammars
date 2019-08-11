@@ -556,3 +556,46 @@ func TestLeftRecursionCombined (t *testing.T) {
 	}
 	
 }
+
+
+/*
+ *******************************************************************************
+ *                      First-Set Clash Testng Functions                       *
+ *******************************************************************************
+*/
+
+// Tests that a basic first-set clash exists
+
+// Tests that no first-set clash exists
+
+// Tests that an obfuscated first-set clash exists
+
+// Tests First-Set in example arithmetic grammar
+func TestFirstSetClashArithmeticGrammar (t *testing.T) {
+
+	// Create productions
+	p1 := form.Production{-1, []int{-2}, 0};		// S -> E
+	p2 := form.Production{-2, []int{-2, 1, -2}, 0};	// E -> E + E
+	p3 := form.Production{-2, []int{-3}, 0};		// E -> T
+	p4 := form.Production{-3, []int{-3, 2, -3}, 0};	// T -> T * T
+	p5 := form.Production{-3, []int{-4}, 0};		// T -> F
+	p6 := form.Production{-4, []int{5}, 0};			// F -> x
+
+	// Create the grammar
+	g := form.Item{p1, p2, p3, p4, p5, p6};
+
+	// Compute first-sets for all productions
+	first_sets, err := FirstSets(&g);
+
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that there exists a first-set clash
+	if isClash, clash := IsFirstSetClash(&g, &first_sets); isClash == false {
+		t.Errorf("A clash exists in the grammar yet none was detected!");
+	} else {
+		fmt.Printf("A clash exists between rules %d and %d\n", clash.nt1, clash.nt2);
+	}
+
+}
