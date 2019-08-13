@@ -565,27 +565,117 @@ func TestLeftRecursionCombined (t *testing.T) {
 */
 
 // Tests that a basic first-set clash exists
-
-// Tests that no first-set clash exists
-
-// Tests that an obfuscated first-set clash exists
-
-// Tests First-Set in example arithmetic grammar
-func TestFirstSetClashArithmeticGrammar (t *testing.T) {
+func TestFirstSetClashBasic (t *testing.T) {
 
 	// Create productions
-	p1 := form.Production{-1, []int{-2}, 0};		// S -> E
-	p2 := form.Production{-2, []int{-2, 1, -2}, 0};	// E -> E + E
-	p3 := form.Production{-2, []int{-3}, 0};		// E -> T
-	p4 := form.Production{-3, []int{-3, 2, -3}, 0};	// T -> T * T
-	p5 := form.Production{-3, []int{-4}, 0};		// T -> F
-	p6 := form.Production{-4, []int{5}, 0};			// F -> x
+	p1 := form.Production{-1, []int{1, -1}, 0};		// A -> a A
+	p2 := form.Production{-1, []int{1,2}, 0};			// A -> a b
 
 	// Create the grammar
-	g := form.Item{p1, p2, p3, p4, p5, p6};
+	g := form.Item{p1, p2};
+
+	// Compute the first-sets
+	first_sets, err := FirstSets(&g);
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that a first-set clash exists for rule A
+	isClash, clash := IsFirstSetClash(&g, &first_sets);
+	if !isClash {
+		t.Errorf("A clash exists in the grammar yet none was reported!");
+	}
+	if !((clash.P1 == 0 && clash.P2 == 1) || (clash.P1 == 1 && clash.P2 == 0)) {
+		t.Errorf("Productions 1 and 2 have a clash, yet these were not reported!");
+	}
+
+}
+
+// Tests case where no first-set clash exists
+func TestNoFirstSetClashBasic (t *testing.T) {
+
+	// Create productions
+	p1 := form.Production{-1, []int{1, -1}, 0};		// A -> a A
+	p2 := form.Production{-1, []int{2}, 0};			// A -> b
+
+	// Create the grammar
+	g := form.Item{p1, p2};
+
+	// Compute the first-sets
+	first_sets, err := FirstSets(&g);
+	if err != nil {
+		t.Errorf("Error computing first-sets: %s", err);
+	}
+
+	// Check that a first-set clash exists for rule A
+	isClash, clash := IsFirstSetClash(&g, &first_sets);
+	if isClash {
+		t.Errorf("A clash exists in the grammar yet none exists!(%d vs %d)", clash.P1, clash.P2);
+	}
+
+}
+
+
+// Test that two productions from the same LHS producing epilon clash
+func TestFirstSetClashEpsilon (t *testing.T) {
+
+	// Create productions
+	p1 := form.Production{-1, []int{}, 0};		// A -> 
+	p2 := form.Production{-1, []int{}, 0};		// A ->
+
+	// Create the grammar
+	g := form.Item{p1, p2};
+
+	// Compute the first-sets
+	first_sets, err := FirstSets(&g);
+	if err != nil {
+		t.Errorf("Error computing first-sets!");
+	}
+
+	// Check that a first-set clash exists for rule A
+	isClash, clash := IsFirstSetClash(&g, &first_sets);
+	if !isClash {
+		t.Errorf("A clash exists in the grammar yet none was reported!");
+	}
+	if !((clash.P1 == 0 && clash.P2 == 1) || (clash.P1 == 1 && clash.P2 == 0)) {
+		t.Errorf("Productions 1 and 2 have a clash, yet these were not reported!");
+	}
+
+
+}
+
+// Tests First-Set clash with interesting epsilon placement
+func TestFirstSetClashArithmeticGrammar (t *testing.T) {
+
+	// Allows sets to be displayed as sets of integers
+	strfy := func (val interface{}) string {
+		intval := val.(int);
+		return fmt.Sprintf("%d", intval);
+	}
+
+	// Create productions
+	// Here you can see why we need to install epsilon
+	// productions prior to other rules. Because otherwise
+	// encounters of the same NT don't know it can make epsilon,
+	// meaning the first-set won't account for tokens that
+	// occur after the appearance of the NT if that NT does
+	// indeed produce epsilon in a later rule
+	p0 := form.Production{-1, []int{-1, 1}, 0};		// A -> A a
+	p1 := form.Production{-1, []int{}, 0};			// A -> 
+
+	// Create the grammar
+	g := form.Item{p0, p1};
 
 	// Compute first-sets for all productions
 	first_sets, err := FirstSets(&g);
+
+	set_a, ok := first_sets[-1];
+	if !ok {
+		t.Errorf("No first-set exists for production A[-1]!");
+	}
+
+	// Debug: Print first-set of A
+	fmt.Printf("First(A) = %s\n", set_a.String(strfy)); 
 
 	if err != nil {
 		t.Errorf("Error computing first-sets: %s", err);
@@ -595,7 +685,7 @@ func TestFirstSetClashArithmeticGrammar (t *testing.T) {
 	if isClash, clash := IsFirstSetClash(&g, &first_sets); isClash == false {
 		t.Errorf("A clash exists in the grammar yet none was detected!");
 	} else {
-		fmt.Printf("A clash exists between rules %d and %d\n", clash.nt1, clash.nt2);
+		fmt.Printf("A clash exists between rules %d and %d\n", clash.P1, clash.P2);
 	}
 
 }

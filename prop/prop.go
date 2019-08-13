@@ -29,11 +29,13 @@ type Rewrite struct {
 	Index	int;				// The index within the source production
 }
 
-// Describes a clash between two productions, each represented by index
+
+// Describes clash between two productions, each represented by grammar index
 type Clash struct {
-	nt1		int;
-	nt2		int;
+	P1		int;
+	P2		int;
 }
+
 
 /*
  *******************************************************************************
@@ -45,6 +47,14 @@ type Clash struct {
 // Returns a mapping of tokens to their first-sets 
 func FirstSets (g *form.Item) (map[int]*sets.Set, error) {
 	var firstSets map[int]*sets.Set = make(map[int]*sets.Set);
+
+	// For each production NT, install epsilon rules before any others
+	for _, p := range *g {
+		if p.EpsilonProduction() {
+			set := sets.Set{form.Epsilon};
+			firstSets[p.Lhs] = &set;
+		}
+	}
 
 	// For each production NT, set its first-set if it isn't already
 	for _, p := range *g {
@@ -366,8 +376,116 @@ func isLeftRecursive (rule, nt int, g *form.Item, firsts *map[int]*sets.Set, vis
 */
 
 
-// Returns true if grammar has first-set clash. First-sets must be valid 
+// Returns true if a grammar contains first-set clashes
 func IsFirstSetClash (g *form.Item, firsts *map[int]*sets.Set) (bool, Clash) {
+
+	// Collect unique productions
+	uniqueProductions := sets.Set{};
+	for _, p := range (*g) {
+		uniqueProductions.Insert(p.Lhs, form.TokenCompare);
+	}
+
+	// Check unique productions for clashes
+	for _, nt := range uniqueProductions {
+		if isClash, clash := isFirstSetClash(nt.(int), g, firsts); isClash {
+			return isClash, clash;
+		}
+	}
+
+	return false, Clash{};
+}
+
+
+// Returns true if a production has a first-set clash. 
+func isFirstSetClash (nt int, g *form.Item, firsts *map[int]*sets.Set) (bool, Clash) {
+
+	// Stores indexes of productions in a grammar
+	var p_indices []int = []int{};
+
+	// Performs a lookup and returns a set for a given first-set map. Auto-panics
+	firstOf := func (nt int, firsts *map[int]*sets.Set) *sets.Set {
+		set, ok := (*firsts)[nt];
+		if !ok {
+			panic(fmt.Errorf("Invalid first-set lookup. Nothing for %d in map!", nt));
+		}
+		return set;
+	}
+
+	// Possible to only need one set, but tracking sets of sets for better feedback
+	var p_firsts []sets.Set = []sets.Set{}; 
+
+	// Collect first-sets of all productions in the grammar beginning with 'nt'
+	for idx, p := range (*g) {
+		var first sets.Set = sets.Set{};
+		var i int;
+
+		// Ignore irrelevant productions
+		if p.Lhs != nt {
+			continue
+		}
+
+		// Store the index of the production
+		p_indices = append(p_indices, idx);
+
+		// If production first-set is empty, store epsilon and move on
+		if p.EpsilonProduction() {
+			first = append(first, form.Epsilon);
+
+		} else {
+
+			// Until T or NT not producing epsilon, add first-set
+			for i = 0; i < (len(p.Rhs) - 1); i++ {
+			
+				// If terminal, stop and store set
+				if form.IsTerminal(p.Rhs[i]) {
+					first = append(first, p.Rhs[i]);
+					break;
+				}
+
+				// If non-terminal, get first-set of that rule
+				set := firstOf(p.Rhs[i], firsts);
+
+				// If set contains epsilon, remove since more follows
+				hasEpsilon := set.Contains(form.Epsilon, form.TokenCompare);
+				set.Remove(form.Epsilon, form.TokenCompare);
+
+				// Combine first-set with current one
+				first = sets.Union(&first, set, form.TokenCompare);
+
+				// If epsilon was not produced, break
+				if !hasEpsilon {
+					break;
+				}
+			}
+
+			// Case: Last element: If terminal, add it. Else merge first-set of NT
+			if form.IsTerminal(p.Rhs[i]) {
+				first.Insert(p.Rhs[i], form.TokenCompare);
+			} else {
+				set := firstOf(p.Rhs[i], firsts);
+				first = sets.Union(&first, set, form.TokenCompare);
+			}
+		}
+
+		// Check if any other set so far intersects the current set
+		for j := 0; j < len(p_firsts); j++ {
+			if isect := sets.Intersect(&first, &(p_firsts[j]), form.TokenCompare); isect.Len() != 0 {
+				return true, Clash{idx, p_indices[j]};
+			}
+		}
+
+		
+		// Otherwise simply insert the set and move on
+		p_firsts = append(p_firsts, first);
+	}
+
+	// Nothing was found
+	return false, Clash{};	
+}
+
+
+// Returns true if grammar has first-set clash. First-sets must be valid
+/*func IsFirstSetClash (g *form.Item, firsts *map[int]*sets.Set) (bool, Clash) {
 	for i := 0; i < len(*g) - 1; i++ {
 		for j := i + 1; j < len(*g); j++ {
 
@@ -396,7 +514,7 @@ func IsFirstSetClash (g *form.Item, firsts *map[int]*sets.Set) (bool, Clash) {
 		}
 	}
 	return false, Clash{0,0};
-}
+}*/
 
 
 
