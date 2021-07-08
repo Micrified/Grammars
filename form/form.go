@@ -1,19 +1,33 @@
 package form
 
+
 /*
- * Form[at] package for grammar analysis.
- * Defines productions, items, item-sets, and
- * common functions that are applied to them.
+ * Form[at] package for grammar analysis
+ * Defines internal productions, items and
+ * item-sets (grammars). Supplies common
+ * functions for general use. Designed
+ * to work with the symtab and parse 
+ * package
 */
 
 
 import (
 	"fmt"
-	"io"
-	"bufio"
-	"regexp"
 	"strings"
+	"grammars/parse"
+	"grammars/symtab"
 )
+
+
+/*
+ *******************************************************************************
+ *                                  Constants                                  *
+ *******************************************************************************
+*/
+
+
+// The epsilon token value
+const Epsilon	=	0
 
 
 /*
@@ -23,213 +37,109 @@ import (
 */
 
 
-// Production: Lhs ::= Rhs
-type Prod struct {
+// Production. Has a Lhs token index and a Rhs token index set
+type Production struct {
+	Lhs int;
+	Rhs []int;
 	Off int;
-	Lhs rune;
-	Rhs []rune;
 }
 
-// Item: Set of productions, each with individual offsets
-type Item struct {
-	Ps []Prod;
+
+// Item. A set of productions
+type Item []Production;
+
+
+/*
+ *******************************************************************************
+ *                               Token Functions                               *
+ *******************************************************************************
+*/
+
+
+// True if token is a non-terminal (t < 0)
+func IsNonTerminal (t int) bool {
+	return (t < 0);
+}
+
+
+// True if token is a terminal (s > 0)
+func IsTerminal (t int) bool {
+	return (t > 0);
+}
+
+
+// True if token is epsilon (s == 0)
+func IsEpsilon (t int) bool {
+	return (t == 0);
+}
+
+
+// General token equality function (for use with sets package)
+func TokenCompare (a, b interface{}) bool {
+	return (a.(int) == b.(int));
 }
 
 
 /*
  *******************************************************************************
- *                       Functions on Rune and Rune Sets                       *
+ *                            Production Functions                             *
  *******************************************************************************
 */
 
 
-// True if rune is a non-terminal
-func IsNonTerminal (r rune) bool {
-	return (r >= 'A' && r <= 'Z');
-}
-
-
-// True if rune is a terminal
-func IsTerminal (r rune) bool {
-	return !IsNonTerminal(r) && (r >= '!' && r <= '~');
-}
-
-
-// True if rune is contained in slice
-func SetContains (set []rune, r rune) bool {
-	for _, x := range set {
-		if x == r {
-			return true;
-		}
-	}
-	return false;
-}
-
-
-// Inserts rune into set. Discards if already present
-func SetInsert (set []rune, r rune) []rune {
-	if SetContains(set, r) {
-		return set;
-	}
-	return append(set, r);
-}
-
-
-// Removes a rune from a set (checks all elements in case)
-func SetRemove (set []rune, r rune) []rune {
-	var filtered []rune = []rune{};
-	for _, x := range set {
-		if x == r {
-			continue;
-		}
-		filtered = append(filtered, x);
-	}
-	return filtered;
-}
-
-
-// Returns the union of two rune sets
-func SetUnion (a, b []rune) []rune {
-	for _, x := range b {
-		a = SetInsert(a, x);
-	}
-	return a;
-}
-
-
-// Returns string form of a set
-func SetToString (set []rune) string {
-	s := "{";
-	l := len(set);
-	i := 0;
-	if l == i {
-		goto end;
-	}
-	for {
-		s += fmt.Sprintf("%c", set[i]);
-		i++;
-		if i >= l {
-			break;
-		}
-		s += ",";
-	}
-	end:
-	s += "}";
-	return s;
-}
-
-
-/*
- *******************************************************************************
- *                          Functions on Productions                           *
- *******************************************************************************
-*/
-
-
-// True if Production is epsilon
-func (p *Prod) Epsilon () bool {
+// True if Production is an epsilon production
+func (p *Production) EpsilonProduction () bool {
 	return len(p.Rhs) == 0;
 }
 
 
-// String form of a production. If dot is true, it is shown in production
-func (p *Prod) String (dot bool) string {
-	s := fmt.Sprintf("%c -> ", p.Lhs);
-	if p.Epsilon() {
-		s += "ε";
-		goto end;
+// String form of a production with optional dot notation
+func (p *Production) String (dot bool, tab *symtab.SymTab) string {
+
+	// Ignore error here, since it still returns placeholder lhs.
+	lhs, _ := symtab.LookupID(p.Lhs, tab); 
+	s := fmt.Sprintf("%s %s ", lhs, parse.DefineOperator);
+
+	// Use epsilon symbol for empty productions
+	if p.EpsilonProduction() {
+		return s + "ε";
 	}
-	for i, r := range p.Rhs {
-		if (dot && i == p.Off) {
+
+	// Concatenate all tokens, including optional dot separator
+	for i, j := range p.Rhs {
+		if dot && i == p.Off {
 			s += ".";
 		}
-		s += fmt.Sprintf("%c ", r);
-	}
-
-	end:
-	return s;
-}
-
-
-/*
- *******************************************************************************
- *                       Functions on Item and Item Sets                       *
- *******************************************************************************
-*/
-
-
-// True if Item has an empty set of productions
-func (item *Item) IsEmpty () bool {
-	return len(item.Ps) == 0;
-}
-
-
-// String form of an Item. If dot is true, it is shown in all productions
-func (item *Item) String (dot bool) string {
-	if item.IsEmpty() {
-		return "Ø";
-	}
-	s := "";
-	for _, p := range item.Ps {
-		s += fmt.Sprintf("%s\n", p.String(dot));
-	}
-	return s;
-}
-
-
-/*
- *******************************************************************************
- *            Functions for parsing Items and Productions from text            *
- *******************************************************************************
-*/
-
-
-// Parse a production from a string
-func ParseProduction (line string) (Prod, error) {
-	var p Prod;
-
-	// Validate format
-	format := `^[ \t]*[A-Z][ \t]*->[ \t]*[-+*/a-zA-Z0-9() ]*[ \t]*[$]?[\n]?$`;
-	match, err := regexp.MatchString(format, line);
-	if err != nil {
-		return p, err;
-	}
-	if match == false {
-		return p, fmt.Errorf("Invalid production format: %q", line);
+		tok, _ := symtab.LookupID(j, tab);
+		s = s + tok + " ";
 	}
 	
-	// Remove whitespace
-	ws := " \t\n";
-	for i := range ws {
-		line = strings.Replace(line, string(ws[i]), "", -1);
-	}
-
-	// Convert line to runes
-	runes := []rune(line);
-	return Prod{Off: 0, Lhs: runes[0], Rhs: runes[3:]}, nil;
+	return strings.TrimSuffix(s, " ");
 }
 
 
-// Parse an item from a readable source
-func ParseItem (r *bufio.Reader) (Item, error) {
-	var line string;
-	var err error;
-	var p Prod;
-	var ps []Prod;
+/*
+ *******************************************************************************
+ *                               Item Functions                                *
+ *******************************************************************************
+*/
 
-	for {
-		if line, err = r.ReadString('\n'); err != nil {
-			break;
-		}
-		if p, err = ParseProduction(line); err != nil {
-			break;
-		}
-		ps = append(ps, p);
-	}
-	i := Item{Ps: ps};
-	if err != io.EOF {
-		return i, err;
-	} else {
-		return i, nil;
-	}
+
+// True if Item is empty
+func (i *Item) IsEmpty () bool {
+	return len(*i) == 0;
 }
+
+
+// String form of an Item with optional dot notation
+func (i *Item) String (dot bool, tab *symtab.SymTab) string {
+	if i.IsEmpty() {
+		return "Ø";
+	}
+	s := (*i)[0].String(dot, tab);
+	for j := 1; j < len(*i); j++ {
+		s = s + (*i)[j].String(dot, tab) + "\n";
+	}
+	return s;
+}
+
